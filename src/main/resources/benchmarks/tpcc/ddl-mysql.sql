@@ -1,155 +1,149 @@
-SET @OLD_UNIQUE_CHECKS=@@UNIQUE_CHECKS, UNIQUE_CHECKS=0;
-SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0;
-
-DROP TABLE IF EXISTS history;
-DROP TABLE IF EXISTS new_order;
-DROP TABLE IF EXISTS order_line;
-DROP TABLE IF EXISTS oorder;
-DROP TABLE IF EXISTS customer;
-DROP TABLE IF EXISTS district;
-DROP TABLE IF EXISTS stock;
-DROP TABLE IF EXISTS item;
-DROP TABLE IF EXISTS warehouse;
-
-CREATE TABLE warehouse (
-    w_id       int            NOT NULL,
-    w_ytd      decimal(12, 2) NOT NULL,
-    w_tax      decimal(4, 4)  NOT NULL,
-    w_name     varchar(10)    NOT NULL,
-    w_street_1 varchar(20)    NOT NULL,
-    w_street_2 varchar(20)    NOT NULL,
-    w_city     varchar(20)    NOT NULL,
-    w_state    char(2)        NOT NULL,
-    w_zip      char(9)        NOT NULL,
-    PRIMARY KEY (w_id)
+-- Создание конфигурационной таблицы (без партиционирования)
+CREATE TABLE bmsql_config (
+  cfg_name    VARCHAR(30) PRIMARY KEY,
+  cfg_value   VARCHAR(50)
 );
 
-CREATE TABLE item (
-    i_id    int           NOT NULL,
-    i_name  varchar(24)   NOT NULL,
-    i_price decimal(5, 2) NOT NULL,
-    i_data  varchar(50)   NOT NULL,
-    i_im_id int           NOT NULL,
-    PRIMARY KEY (i_id)
-);
+-- Создание tablegroup для colocation данных
+CREATE TABLEGROUP tpcc_group PARTITION BY HASH PARTITIONS 9;
 
-CREATE TABLE stock (
-    s_w_id       int           NOT NULL,
-    s_i_id       int           NOT NULL,
-    s_quantity   int           NOT NULL,
-    s_ytd        decimal(8, 2) NOT NULL,
-    s_order_cnt  int           NOT NULL,
-    s_remote_cnt int           NOT NULL,
-    s_data       varchar(50)   NOT NULL,
-    s_dist_01    char(24)      NOT NULL,
-    s_dist_02    char(24)      NOT NULL,
-    s_dist_03    char(24)      NOT NULL,
-    s_dist_04    char(24)      NOT NULL,
-    s_dist_05    char(24)      NOT NULL,
-    s_dist_06    char(24)      NOT NULL,
-    s_dist_07    char(24)      NOT NULL,
-    s_dist_08    char(24)      NOT NULL,
-    s_dist_09    char(24)      NOT NULL,
-    s_dist_10    char(24)      NOT NULL,
-    FOREIGN KEY (s_w_id) REFERENCES warehouse (w_id) ON DELETE CASCADE,
-    FOREIGN KEY (s_i_id) REFERENCES item (i_id) ON DELETE CASCADE,
-    PRIMARY KEY (s_w_id, s_i_id)
-);
+-- Таблица WAREHOUSE
+CREATE TABLE bmsql_warehouse (
+  w_id        INTEGER   NOT NULL,
+  w_ytd       DECIMAL(12,2),
+  w_tax       DECIMAL(4,4),
+  w_name      VARCHAR(10),
+  w_street_1  VARCHAR(20),
+  w_street_2  VARCHAR(20),
+  w_city      VARCHAR(20),
+  w_state     CHAR(2),
+  w_zip       CHAR(9),
+  PRIMARY KEY(w_id)
+) TABLEGROUP='tpcc_group' PARTITION BY HASH(w_id) PARTITIONS 9;
 
-CREATE TABLE district (
-    d_w_id      int            NOT NULL,
-    d_id        int            NOT NULL,
-    d_ytd       decimal(12, 2) NOT NULL,
-    d_tax       decimal(4, 4)  NOT NULL,
-    d_next_o_id int            NOT NULL,
-    d_name      varchar(10)    NOT NULL,
-    d_street_1  varchar(20)    NOT NULL,
-    d_street_2  varchar(20)    NOT NULL,
-    d_city      varchar(20)    NOT NULL,
-    d_state     char(2)        NOT NULL,
-    d_zip       char(9)        NOT NULL,
-    FOREIGN KEY (d_w_id) REFERENCES warehouse (w_id) ON DELETE CASCADE,
-    PRIMARY KEY (d_w_id, d_id)
-);
+-- Таблица DISTRICT
+CREATE TABLE bmsql_district (
+  d_w_id       INTEGER       NOT NULL,
+  d_id         INTEGER       NOT NULL,
+  d_ytd        DECIMAL(12,2),
+  d_tax        DECIMAL(4,4),
+  d_next_o_id  INTEGER,
+  d_name       VARCHAR(10),
+  d_street_1   VARCHAR(20),
+  d_street_2   VARCHAR(20),
+  d_city       VARCHAR(20),
+  d_state      CHAR(2),
+  d_zip        CHAR(9),
+  PRIMARY KEY (d_w_id, d_id)
+) TABLEGROUP='tpcc_group' PARTITION BY HASH(d_w_id) PARTITIONS 9;
 
-CREATE TABLE customer (
-    c_w_id         int            NOT NULL,
-    c_d_id         int            NOT NULL,
-    c_id           int            NOT NULL,
-    c_discount     decimal(4, 4)  NOT NULL,
-    c_credit       char(2)        NOT NULL,
-    c_last         varchar(16)    NOT NULL,
-    c_first        varchar(16)    NOT NULL,
-    c_credit_lim   decimal(12, 2) NOT NULL,
-    c_balance      decimal(12, 2) NOT NULL,
-    c_ytd_payment  float          NOT NULL,
-    c_payment_cnt  int            NOT NULL,
-    c_delivery_cnt int            NOT NULL,
-    c_street_1     varchar(20)    NOT NULL,
-    c_street_2     varchar(20)    NOT NULL,
-    c_city         varchar(20)    NOT NULL,
-    c_state        char(2)        NOT NULL,
-    c_zip          char(9)        NOT NULL,
-    c_phone        char(16)       NOT NULL,
-    c_since        timestamp      NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    c_middle       char(2)        NOT NULL,
-    c_data         varchar(500)   NOT NULL,
-    FOREIGN KEY (c_w_id, c_d_id) REFERENCES district (d_w_id, d_id) ON DELETE CASCADE,
-    PRIMARY KEY (c_w_id, c_d_id, c_id)
-);
+-- Таблица CUSTOMER
+CREATE TABLE bmsql_customer (
+  c_w_id         INTEGER        NOT NULL,
+  c_d_id         INTEGER        NOT NULL,
+  c_id           INTEGER        NOT NULL,
+  c_discount     DECIMAL(4,4),
+  c_credit       CHAR(2),
+  c_last         VARCHAR(16),
+  c_first        VARCHAR(16),
+  c_credit_lim   DECIMAL(12,2),
+  c_balance      DECIMAL(12,2),
+  c_ytd_payment  DECIMAL(12,2),
+  c_payment_cnt  INTEGER,
+  c_delivery_cnt INTEGER,
+  c_street_1     VARCHAR(20),
+  c_street_2     VARCHAR(20),
+  c_city         VARCHAR(20),
+  c_state        CHAR(2),
+  c_zip          CHAR(9),
+  c_phone        CHAR(16),
+  c_since        TIMESTAMP,
+  c_middle       CHAR(2),
+  c_data         VARCHAR(500),
+  PRIMARY KEY (c_w_id, c_d_id, c_id)
+) TABLEGROUP='tpcc_group' PARTITION BY HASH(c_w_id) PARTITIONS 9;
 
-CREATE TABLE history (
-    h_c_id   int           NOT NULL,
-    h_c_d_id int           NOT NULL,
-    h_c_w_id int           NOT NULL,
-    h_d_id   int           NOT NULL,
-    h_w_id   int           NOT NULL,
-    h_date   timestamp     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    h_amount decimal(6, 2) NOT NULL,
-    h_data   varchar(24)   NOT NULL,
-    FOREIGN KEY (h_c_w_id, h_c_d_id, h_c_id) REFERENCES customer (c_w_id, c_d_id, c_id) ON DELETE CASCADE,
-    FOREIGN KEY (h_w_id, h_d_id) REFERENCES district (d_w_id, d_id) ON DELETE CASCADE
-);
+-- Таблица HISTORY
+CREATE TABLE bmsql_history (
+  hist_id  INTEGER,
+  h_c_id   INTEGER,
+  h_c_d_id INTEGER,
+  h_c_w_id INTEGER,
+  h_d_id   INTEGER,
+  h_w_id   INTEGER,
+  h_date   TIMESTAMP,
+  h_amount DECIMAL(6,2),
+  h_data   VARCHAR(24)
+) TABLEGROUP='tpcc_group' PARTITION BY HASH(h_w_id) PARTITIONS 9;
 
-CREATE TABLE oorder (
-    o_w_id       int       NOT NULL,
-    o_d_id       int       NOT NULL,
-    o_id         int       NOT NULL,
-    o_c_id       int       NOT NULL,
-    o_carrier_id int                DEFAULT NULL,
-    o_ol_cnt     int       NOT NULL,
-    o_all_local  int       NOT NULL,
-    o_entry_d    timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (o_w_id, o_d_id, o_id),
-    FOREIGN KEY (o_w_id, o_d_id, o_c_id) REFERENCES customer (c_w_id, c_d_id, c_id) ON DELETE CASCADE,
-    UNIQUE (o_w_id, o_d_id, o_c_id, o_id)
-);
+-- Таблица NEW_ORDER
+CREATE TABLE bmsql_new_order (
+  no_w_id  INTEGER   NOT NULL,
+  no_d_id  INTEGER   NOT NULL,
+  no_o_id  INTEGER   NOT NULL,
+  PRIMARY KEY (no_w_id, no_d_id, no_o_id)
+) TABLEGROUP='tpcc_group' PARTITION BY HASH(no_w_id) PARTITIONS 9;
 
-CREATE TABLE new_order (
-    no_w_id int NOT NULL,
-    no_d_id int NOT NULL,
-    no_o_id int NOT NULL,
-    FOREIGN KEY (no_w_id, no_d_id, no_o_id) REFERENCES oorder (o_w_id, o_d_id, o_id) ON DELETE CASCADE,
-    PRIMARY KEY (no_w_id, no_d_id, no_o_id)
-);
+-- Таблица OORDER
+CREATE TABLE bmsql_oorder (
+  o_w_id       INTEGER      NOT NULL,
+  o_d_id       INTEGER      NOT NULL,
+  o_id         INTEGER      NOT NULL,
+  o_c_id       INTEGER,
+  o_carrier_id INTEGER,
+  o_ol_cnt     INTEGER,
+  o_all_local  INTEGER,
+  o_entry_d    TIMESTAMP,
+  PRIMARY KEY (o_w_id, o_d_id, o_id)
+) TABLEGROUP='tpcc_group' PARTITION BY HASH(o_w_id) PARTITIONS 9;
 
-CREATE TABLE order_line (
-    ol_w_id        int           NOT NULL,
-    ol_d_id        int           NOT NULL,
-    ol_o_id        int           NOT NULL,
-    ol_number      int           NOT NULL,
-    ol_i_id        int           NOT NULL,
-    ol_delivery_d  timestamp     NULL DEFAULT NULL,
-    ol_amount      decimal(6, 2) NOT NULL,
-    ol_supply_w_id int           NOT NULL,
-    ol_quantity    int           NOT NULL,
-    ol_dist_info   char(24)      NOT NULL,
-    FOREIGN KEY (ol_w_id, ol_d_id, ol_o_id) REFERENCES oorder (o_w_id, o_d_id, o_id) ON DELETE CASCADE,
-    FOREIGN KEY (ol_supply_w_id, ol_i_id) REFERENCES stock (s_w_id, s_i_id) ON DELETE CASCADE,
-    PRIMARY KEY (ol_w_id, ol_d_id, ol_o_id, ol_number)
-);
+-- Таблица ORDER_LINE
+CREATE TABLE bmsql_order_line (
+  ol_w_id         INTEGER   NOT NULL,
+  ol_d_id         INTEGER   NOT NULL,
+  ol_o_id         INTEGER   NOT NULL,
+  ol_number       INTEGER   NOT NULL,
+  ol_i_id         INTEGER   NOT NULL,
+  ol_delivery_d   TIMESTAMP,
+  ol_amount       DECIMAL(6,2),
+  ol_supply_w_id  INTEGER,
+  ol_quantity     INTEGER,
+  ol_dist_info    CHAR(24),
+  PRIMARY KEY (ol_w_id, ol_d_id, ol_o_id, ol_number)
+) TABLEGROUP='tpcc_group' PARTITION BY HASH(ol_w_id) PARTITIONS 9;
 
-CREATE INDEX idx_customer_name ON customer (c_w_id, c_d_id, c_last, c_first);
+-- Таблица ITEM (реплицируется на все ноды)
+CREATE TABLE bmsql_item (
+  i_id     INTEGER      NOT NULL,
+  i_name   VARCHAR(24),
+  i_price  DECIMAL(5,2),
+  i_data   VARCHAR(50),
+  i_im_id  INTEGER,
+  PRIMARY KEY (i_id)
+) DUPLICATE_SCOPE='cluster';
 
-SET FOREIGN_KEY_CHECKS=@OLD_FOREIGN_KEY_CHECKS;
-SET UNIQUE_CHECKS=@OLD_UNIQUE_CHECKS;
+-- Таблица STOCK (с bloom filter для оптимизации)
+CREATE TABLE bmsql_stock (
+  s_w_id       INTEGER       NOT NULL,
+  s_i_id       INTEGER       NOT NULL,
+  s_quantity   INTEGER,
+  s_ytd        INTEGER,
+  s_order_cnt  INTEGER,
+  s_remote_cnt INTEGER,
+  s_data       VARCHAR(50),
+  s_dist_01    CHAR(24),
+  s_dist_02    CHAR(24),
+  s_dist_03    CHAR(24),
+  s_dist_04    CHAR(24),
+  s_dist_05    CHAR(24),
+  s_dist_06    CHAR(24),
+  s_dist_07    CHAR(24),
+  s_dist_08    CHAR(24),
+  s_dist_09    CHAR(24),
+  s_dist_10    CHAR(24),
+  PRIMARY KEY (s_w_id, s_i_id)
+) TABLEGROUP='tpcc_group' USE_BLOOM_FILTER=TRUE PARTITION BY HASH(s_w_id) PARTITIONS 9;
+
+-- Индексы (создаются после загрузки данных)
+-- CREATE INDEX bmsql_customer_idx1 ON bmsql_customer (c_w_id, c_d_id, c_last, c_first) LOCAL;
+-- CREATE INDEX bmsql_oorder_idx1 ON bmsql_oorder (o_w_id, o_d_id, o_carrier_id, o_id) LOCAL;
