@@ -1,3 +1,17 @@
+-- TPC-C DDL для OceanBase
+-- Удаляем существующие объекты
+DROP TABLE IF EXISTS bmsql_order_line;
+DROP TABLE IF EXISTS bmsql_new_order;
+DROP TABLE IF EXISTS bmsql_oorder;
+DROP TABLE IF EXISTS bmsql_history;
+DROP TABLE IF EXISTS bmsql_customer;
+DROP TABLE IF EXISTS bmsql_stock;
+DROP TABLE IF EXISTS bmsql_district;
+DROP TABLE IF EXISTS bmsql_warehouse;
+DROP TABLE IF EXISTS bmsql_item;
+DROP TABLE IF EXISTS bmsql_config;
+DROP TABLEGROUP IF EXISTS tpcc_group;
+
 -- Создание конфигурационной таблицы (без партиционирования)
 CREATE TABLE bmsql_config (
   cfg_name    VARCHAR(30) PRIMARY KEY,
@@ -144,6 +158,6 @@ CREATE TABLE bmsql_stock (
   PRIMARY KEY (s_w_id, s_i_id)
 ) TABLEGROUP='tpcc_group' USE_BLOOM_FILTER=TRUE PARTITION BY HASH(s_w_id) PARTITIONS 9;
 
--- Индексы (создаются после загрузки данных)
+-- Индексы (создаются после загрузки данных вручную)
 -- CREATE INDEX bmsql_customer_idx1 ON bmsql_customer (c_w_id, c_d_id, c_last, c_first) LOCAL;
 -- CREATE INDEX bmsql_oorder_idx1 ON bmsql_oorder (o_w_id, o_d_id, o_carrier_id, o_id) LOCAL;
