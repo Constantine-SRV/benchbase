@@ -1,7 +1,3 @@
--- CH-benCHmark DDL для OceanBase
--- Добавляет 3 справочные таблицы к TPC-C схеме
--- Foreign Keys создаются сразу для честности теста
--- Только индексы создаются после загрузки данных
 
 DROP TABLE IF EXISTS supplier;
 DROP TABLE IF EXISTS nation;
