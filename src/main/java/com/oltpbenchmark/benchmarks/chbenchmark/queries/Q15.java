@@ -19,13 +19,11 @@ package com.oltpbenchmark.benchmarks.chbenchmark.queries;
 
 import com.oltpbenchmark.api.SQLStmt;
 import java.sql.Connection;
-import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 
 public class Q15 extends GenericQuery {
 
-  // Сохраняем оригинальные поля для совместимости с фреймворком
   public final SQLStmt createview_stmt =
       new SQLStmt(
           "CREATE view revenue0 (supplier_no, total_revenue) AS "
@@ -59,50 +57,28 @@ public class Q15 extends GenericQuery {
     return query_stmt;
   }
 
-  @Override
   public void run(Connection conn) throws SQLException {
-    // ЕДИНСТВЕННОЕ ИЗМЕНЕНИЕ: используем уникальное имя VIEW для каждого потока
-    String viewName = "revenue_" + Thread.currentThread().threadId();
-    
-    // Динамически создаём SQL с уникальным именем VIEW
-    String createSQL =
-        "CREATE view " + viewName + " (supplier_no, total_revenue) AS "
-            + "SELECT "
-            + "mod((s_w_id * s_i_id),10000) as supplier_no, "
-            + "sum(ol_amount) as total_revenue "
-            + "FROM "
-            + "order_line, stock "
-            + "WHERE "
-            + "ol_i_id = s_i_id "
-            + "AND ol_supply_w_id = s_w_id "
-            + "AND ol_delivery_d >= '2007-01-02 00:00:00.000000' "
-            + "GROUP BY "
-            + "supplier_no";
-
-    String querySQL =
-        "SELECT su_suppkey, "
-            + "su_name, "
-            + "su_address, "
-            + "su_phone, "
-            + "total_revenue "
-            + "FROM supplier, " + viewName + " "
-            + "WHERE su_suppkey = supplier_no "
-            + "AND total_revenue = (select max(total_revenue) from " + viewName + ") "
-            + "ORDER BY su_suppkey";
-
-    String dropSQL = "DROP VIEW " + viewName;
-
-    // Выполняем как в оригинале, но с уникальным именем VIEW
+    // With this query, we have to set up a view before we execute the
+    // query, then drop it once we're done.
     try (Statement stmt = conn.createStatement()) {
       try {
-        stmt.executeUpdate(createSQL);
-        try (ResultSet rs = stmt.executeQuery(querySQL)) {
-          while (rs.next()) {
-            // Проходим результаты
-          }
+        // Пытаемся создать view, игнорируем все ошибки
+        // Если view не создастся (и не существует), ошибка вылетит на следующем шаге
+        try {
+          stmt.executeUpdate(createview_stmt.getSQL());
+        } catch (SQLException e) {
+          // Игнорируем - view скорее всего уже существует
         }
+        
+        super.run(conn);
+        
       } finally {
-        stmt.executeUpdate(dropSQL);
+        // Пытаемся удалить view, игнорируем все ошибки
+        try {
+          stmt.executeUpdate(dropview_stmt.getSQL());
+        } catch (SQLException e) {
+          // Игнорируем - view может быть уже удалена другим потоком
+        }
       }
     }
   }
