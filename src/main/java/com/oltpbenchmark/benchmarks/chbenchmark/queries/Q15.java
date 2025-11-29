@@ -21,7 +21,8 @@ public class Q15 extends GenericQuery {
   @Override
   public void run(Connection conn) throws SQLException {
     // Создаём уникальное имя для view, зависящее от потока
-    String viewName = "revenue_" + Thread.currentThread().getId(); // ⚠️ getId() вместо threadId()
+    // threadId() - правильный метод для Java 19+
+    String viewName = "revenue_" + Thread.currentThread().threadId();
     
     String createSQL =
         "CREATE VIEW " + viewName + " (supplier_no, total_revenue) AS "
