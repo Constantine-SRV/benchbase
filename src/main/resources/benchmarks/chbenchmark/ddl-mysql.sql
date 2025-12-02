@@ -1,19 +1,23 @@
+SET @OLD_UNIQUE_CHECKS=@@UNIQUE_CHECKS, UNIQUE_CHECKS=0;
+SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0;
 
-DROP TABLE IF EXISTS supplier;
-DROP TABLE IF EXISTS nation;
-DROP TABLE IF EXISTS region;
+DROP TABLE IF EXISTS supplier CASCADE;
+DROP TABLE IF EXISTS nation CASCADE;
+DROP TABLE IF EXISTS region CASCADE;
 
--- REGION - очень маленькая справочная таблица (5 строк)
--- Реплицируем на все ноды для быстрого доступа
+-- =========================
+-- region (5 rows - не партиционируем)
+-- =========================
 CREATE TABLE region (
     r_regionkey int       NOT NULL,
     r_name      char(55)  NOT NULL,
     r_comment   char(152) NOT NULL,
     PRIMARY KEY (r_regionkey)
-) DUPLICATE_SCOPE='cluster';
+);
 
--- NATION - справочная таблица (25 строк)
--- Реплицируем на все ноды
+-- =========================
+-- nation (25 rows - не партиционируем)
+-- =========================
 CREATE TABLE nation (
     n_nationkey int       NOT NULL,
     n_name      char(25)  NOT NULL,
@@ -21,21 +25,22 @@ CREATE TABLE nation (
     n_comment   char(152) NOT NULL,
     FOREIGN KEY (n_regionkey) REFERENCES region (r_regionkey) ON DELETE CASCADE,
     PRIMARY KEY (n_nationkey)
-) DUPLICATE_SCOPE='cluster';
+);
 
--- SUPPLIER - большая таблица (scale_factor * 10000 строк)
--- Партиционируем по su_suppkey и добавляем в tpcc_group
+-- =========================
+-- supplier (малая таблица - не партиционируем)
+-- =========================
 CREATE TABLE supplier (
     su_suppkey   int            NOT NULL,
     su_name      char(25)       NOT NULL,
     su_address   varchar(40)    NOT NULL,
     su_nationkey int            NOT NULL,
     su_phone     char(15)       NOT NULL,
-    su_acctbal   decimal(12, 2) NOT NULL,
+    su_acctbal   numeric(12, 2) NOT NULL,
     su_comment   char(101)      NOT NULL,
     FOREIGN KEY (su_nationkey) REFERENCES nation (n_nationkey) ON DELETE CASCADE,
     PRIMARY KEY (su_suppkey)
-) TABLEGROUP='tpcc_group' PARTITION BY HASH(su_suppkey) PARTITIONS 9;
+);
 
--- Индексы создаются вручную после загрузки данных для ускорения:
--- CREATE INDEX supplier_nation_idx ON supplier (su_nationkey) LOCAL;
+SET FOREIGN_KEY_CHECKS=@OLD_FOREIGN_KEY_CHECKS;
+SET UNIQUE_CHECKS=@OLD_UNIQUE_CHECKS;
