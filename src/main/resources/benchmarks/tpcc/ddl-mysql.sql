@@ -1,6 +1,3 @@
--- TPC-C DDL для OceanBase
--- Основан на оригинальном MySQL DDL с добавлением партиционирования
-
 SET @OLD_UNIQUE_CHECKS=@@UNIQUE_CHECKS, UNIQUE_CHECKS=0;
 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0;
 
@@ -13,11 +10,18 @@ DROP TABLE IF EXISTS district;
 DROP TABLE IF EXISTS stock;
 DROP TABLE IF EXISTS item;
 DROP TABLE IF EXISTS warehouse;
+
+-- Удаляем tablegroup если существует
 DROP TABLEGROUP IF EXISTS tpcc_group;
 
--- Создание tablegroup для colocation данных
-CREATE TABLEGROUP tpcc_group PARTITION BY HASH PARTITIONS 9;
+-- Создаём tablegroup для TPC-C с 18 партициями (оптимально для 6 серверов)
+CREATE TABLEGROUP tpcc_group
+  PARTITION BY HASH
+  PARTITIONS 18;
 
+-- =========================
+-- warehouse (главная таблица)
+-- =========================
 CREATE TABLE warehouse (
     w_id       int            NOT NULL,
     w_ytd      decimal(12, 2) NOT NULL,
@@ -29,8 +33,13 @@ CREATE TABLE warehouse (
     w_state    char(2)        NOT NULL,
     w_zip      char(9)        NOT NULL,
     PRIMARY KEY (w_id)
-) TABLEGROUP='tpcc_group' PARTITION BY HASH(w_id) PARTITIONS 9;
+)
+TABLEGROUP = 'tpcc_group'
+PARTITION BY HASH (w_id) PARTITIONS 18;
 
+-- =========================
+-- item (справочная таблица - не партиционируем)
+-- =========================
 CREATE TABLE item (
     i_id    int           NOT NULL,
     i_name  varchar(24)   NOT NULL,
@@ -38,8 +47,11 @@ CREATE TABLE item (
     i_data  varchar(50)   NOT NULL,
     i_im_id int           NOT NULL,
     PRIMARY KEY (i_id)
-) DUPLICATE_SCOPE='cluster';
+);
 
+-- =========================
+-- stock
+-- =========================
 CREATE TABLE stock (
     s_w_id       int           NOT NULL,
     s_i_id       int           NOT NULL,
@@ -61,8 +73,13 @@ CREATE TABLE stock (
     FOREIGN KEY (s_w_id) REFERENCES warehouse (w_id) ON DELETE CASCADE,
     FOREIGN KEY (s_i_id) REFERENCES item (i_id) ON DELETE CASCADE,
     PRIMARY KEY (s_w_id, s_i_id)
-) TABLEGROUP='tpcc_group' USE_BLOOM_FILTER=TRUE PARTITION BY HASH(s_w_id) PARTITIONS 9;
+)
+TABLEGROUP = 'tpcc_group'
+PARTITION BY HASH (s_w_id) PARTITIONS 18;
 
+-- =========================
+-- district
+-- =========================
 CREATE TABLE district (
     d_w_id      int            NOT NULL,
     d_id        int            NOT NULL,
@@ -77,8 +94,13 @@ CREATE TABLE district (
     d_zip       char(9)        NOT NULL,
     FOREIGN KEY (d_w_id) REFERENCES warehouse (w_id) ON DELETE CASCADE,
     PRIMARY KEY (d_w_id, d_id)
-) TABLEGROUP='tpcc_group' PARTITION BY HASH(d_w_id) PARTITIONS 9;
+)
+TABLEGROUP = 'tpcc_group'
+PARTITION BY HASH (d_w_id) PARTITIONS 18;
 
+-- =========================
+-- customer
+-- =========================
 CREATE TABLE customer (
     c_w_id         int            NOT NULL,
     c_d_id         int            NOT NULL,
@@ -103,8 +125,15 @@ CREATE TABLE customer (
     c_data         varchar(500)   NOT NULL,
     FOREIGN KEY (c_w_id, c_d_id) REFERENCES district (d_w_id, d_id) ON DELETE CASCADE,
     PRIMARY KEY (c_w_id, c_d_id, c_id)
-) TABLEGROUP='tpcc_group' PARTITION BY HASH(c_w_id) PARTITIONS 9;
+)
+TABLEGROUP = 'tpcc_group'
+PARTITION BY HASH (c_w_id) PARTITIONS 18;
 
+CREATE INDEX idx_customer_name ON customer (c_w_id, c_d_id, c_last, c_first);
+
+-- =========================
+-- history
+-- =========================
 CREATE TABLE history (
     h_c_id   int           NOT NULL,
     h_c_d_id int           NOT NULL,
@@ -116,8 +145,13 @@ CREATE TABLE history (
     h_data   varchar(24)   NOT NULL,
     FOREIGN KEY (h_c_w_id, h_c_d_id, h_c_id) REFERENCES customer (c_w_id, c_d_id, c_id) ON DELETE CASCADE,
     FOREIGN KEY (h_w_id, h_d_id) REFERENCES district (d_w_id, d_id) ON DELETE CASCADE
-) TABLEGROUP='tpcc_group' PARTITION BY HASH(h_w_id) PARTITIONS 9;
+)
+TABLEGROUP = 'tpcc_group'
+PARTITION BY HASH (h_w_id) PARTITIONS 18;
 
+-- =========================
+-- oorder
+-- =========================
 CREATE TABLE oorder (
     o_w_id       int       NOT NULL,
     o_d_id       int       NOT NULL,
@@ -130,16 +164,26 @@ CREATE TABLE oorder (
     PRIMARY KEY (o_w_id, o_d_id, o_id),
     FOREIGN KEY (o_w_id, o_d_id, o_c_id) REFERENCES customer (c_w_id, c_d_id, c_id) ON DELETE CASCADE,
     UNIQUE (o_w_id, o_d_id, o_c_id, o_id)
-) TABLEGROUP='tpcc_group' PARTITION BY HASH(o_w_id) PARTITIONS 9;
+)
+TABLEGROUP = 'tpcc_group'
+PARTITION BY HASH (o_w_id) PARTITIONS 18;
 
+-- =========================
+-- new_order
+-- =========================
 CREATE TABLE new_order (
     no_w_id int NOT NULL,
     no_d_id int NOT NULL,
     no_o_id int NOT NULL,
     FOREIGN KEY (no_w_id, no_d_id, no_o_id) REFERENCES oorder (o_w_id, o_d_id, o_id) ON DELETE CASCADE,
     PRIMARY KEY (no_w_id, no_d_id, no_o_id)
-) TABLEGROUP='tpcc_group' PARTITION BY HASH(no_w_id) PARTITIONS 9;
+)
+TABLEGROUP = 'tpcc_group'
+PARTITION BY HASH (no_w_id) PARTITIONS 18;
 
+-- =========================
+-- order_line
+-- =========================
 CREATE TABLE order_line (
     ol_w_id        int           NOT NULL,
     ol_d_id        int           NOT NULL,
@@ -154,10 +198,9 @@ CREATE TABLE order_line (
     FOREIGN KEY (ol_w_id, ol_d_id, ol_o_id) REFERENCES oorder (o_w_id, o_d_id, o_id) ON DELETE CASCADE,
     FOREIGN KEY (ol_supply_w_id, ol_i_id) REFERENCES stock (s_w_id, s_i_id) ON DELETE CASCADE,
     PRIMARY KEY (ol_w_id, ol_d_id, ol_o_id, ol_number)
-) TABLEGROUP='tpcc_group' PARTITION BY HASH(ol_w_id) PARTITIONS 9;
-
--- Индексы создаются вручную после загрузки данных для ускорения:
--- CREATE INDEX idx_customer_name ON customer (c_w_id, c_d_id, c_last, c_first) LOCAL;
+)
+TABLEGROUP = 'tpcc_group'
+PARTITION BY HASH (ol_w_id) PARTITIONS 18;
 
 SET FOREIGN_KEY_CHECKS=@OLD_FOREIGN_KEY_CHECKS;
 SET UNIQUE_CHECKS=@OLD_UNIQUE_CHECKS;
