@@ -11,10 +11,10 @@ DROP TABLE IF EXISTS user_profiles CASCADE;
 -- Удаляем tablegroup после всех таблиц
 DROP TABLEGROUP IF EXISTS twitter_group;
 
--- Создаём tablegroup для twitter
+-- Создаём tablegroup для twitter с 18 партициями (оптимально для 6 серверов)
 CREATE TABLEGROUP twitter_group
   PARTITION BY HASH
-  PARTITIONS 9;
+  PARTITIONS 18;
 
 -- =========================
 -- user_profiles
@@ -29,7 +29,7 @@ CREATE TABLE user_profiles (
     PRIMARY KEY (uid)
 )
 TABLEGROUP = 'twitter_group'
-PARTITION BY HASH (uid) PARTITIONS 9;
+PARTITION BY HASH (uid) PARTITIONS 18;
 
 CREATE INDEX idx_user_followers ON user_profiles (followers);
 CREATE INDEX idx_user_partition ON user_profiles (partitionid);
@@ -45,7 +45,7 @@ CREATE TABLE followers (
     PRIMARY KEY (f1, f2)
 )
 TABLEGROUP = 'twitter_group'
-PARTITION BY HASH (f1) PARTITIONS 9;
+PARTITION BY HASH (f1) PARTITIONS 18;
 
 -- =========================
 -- follows
@@ -58,7 +58,7 @@ CREATE TABLE follows (
     PRIMARY KEY (f1, f2)
 )
 TABLEGROUP = 'twitter_group'
-PARTITION BY HASH (f1) PARTITIONS 9;
+PARTITION BY HASH (f1) PARTITIONS 18;
 
 -- =========================
 -- tweets
@@ -73,7 +73,7 @@ CREATE TABLE tweets (
     PRIMARY KEY (id, uid)
 )
 TABLEGROUP = 'twitter_group'
-PARTITION BY HASH (uid) PARTITIONS 9;
+PARTITION BY HASH (uid) PARTITIONS 18;
 
 CREATE INDEX idx_tweets_uid ON tweets (uid);
 
@@ -89,7 +89,7 @@ CREATE TABLE added_tweets (
     PRIMARY KEY (id, uid)
 )
 TABLEGROUP = 'twitter_group'
-PARTITION BY HASH (uid) PARTITIONS 9;
+PARTITION BY HASH (uid) PARTITIONS 18;
 
 CREATE INDEX idx_added_tweets_uid ON added_tweets (uid);
 
