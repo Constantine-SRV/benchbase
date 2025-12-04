@@ -22,19 +22,19 @@ IF OBJECT_ID('CATEGORY') IS NOT NULL DROP table CATEGORY;
 IF OBJECT_ID('[USER]') IS NOT NULL DROP table [USER];
 IF OBJECT_ID('REGION') IS NOT NULL DROP table REGION;
 
--- Create tables
+-- Create tables with PAGE compression
 CREATE TABLE CONFIG_PROFILE (
     cfp_scale_factor            FLOAT NOT NULL,
     cfp_loader_start            DATETIME NOT NULL,
     cfp_loader_stop             DATETIME NOT NULL,
     cfp_user_item_histogram     TEXT NOT NULL
-);
+) WITH (DATA_COMPRESSION = PAGE);
 
 CREATE TABLE REGION (
     r_id                BIGINT NOT NULL,
     r_name              VARCHAR(32),
-    PRIMARY KEY (r_id)
-);
+    PRIMARY KEY (r_id) WITH (DATA_COMPRESSION = PAGE)
+) WITH (DATA_COMPRESSION = PAGE);
 
 CREATE TABLE USERACCT (
     u_id                BIGINT NOT NULL,
@@ -60,9 +60,9 @@ CREATE TABLE USERACCT (
     u_iattr5            BIGINT DEFAULT NULL,
     u_iattr6            BIGINT DEFAULT NULL,
     u_iattr7            BIGINT DEFAULT NULL,
-    PRIMARY KEY (u_id)
-);
-CREATE INDEX IDX_USERACCT_REGION ON USERACCT (u_id, u_r_id);
+    PRIMARY KEY (u_id) WITH (DATA_COMPRESSION = PAGE)
+) WITH (DATA_COMPRESSION = PAGE);
+CREATE INDEX IDX_USERACCT_REGION ON USERACCT (u_id, u_r_id) WITH (DATA_COMPRESSION = PAGE);
 
 CREATE TABLE USERACCT_ATTRIBUTES (
     ua_id               BIGINT NOT NULL,
@@ -70,29 +70,29 @@ CREATE TABLE USERACCT_ATTRIBUTES (
     ua_name             VARCHAR(32) NOT NULL,
     ua_value            VARCHAR(32) NOT NULL,
     u_created           DATETIME,
-    PRIMARY KEY (ua_id, ua_u_id)
-);
+    PRIMARY KEY (ua_id, ua_u_id) WITH (DATA_COMPRESSION = PAGE)
+) WITH (DATA_COMPRESSION = PAGE);
 
 CREATE TABLE CATEGORY (
     c_id                BIGINT NOT NULL,
     c_name              VARCHAR(50),
     c_parent_id         BIGINT REFERENCES CATEGORY (c_id),
-    PRIMARY KEY (c_id)
-);
+    PRIMARY KEY (c_id) WITH (DATA_COMPRESSION = PAGE)
+) WITH (DATA_COMPRESSION = PAGE);
 
 CREATE TABLE GLOBAL_ATTRIBUTE_GROUP (
     gag_id              BIGINT NOT NULL,
     gag_c_id            BIGINT NOT NULL REFERENCES CATEGORY (c_id),
     gag_name            VARCHAR(100) NOT NULL,
-    PRIMARY KEY (gag_id)
-);
+    PRIMARY KEY (gag_id) WITH (DATA_COMPRESSION = PAGE)
+) WITH (DATA_COMPRESSION = PAGE);
 
 CREATE TABLE GLOBAL_ATTRIBUTE_VALUE (
     gav_id              BIGINT NOT NULL,
     gav_gag_id          BIGINT NOT NULL REFERENCES GLOBAL_ATTRIBUTE_GROUP (gag_id),
     gav_name            VARCHAR(100) NOT NULL,
-    PRIMARY KEY (gav_id, gav_gag_id)
-);
+    PRIMARY KEY (gav_id, gav_gag_id) WITH (DATA_COMPRESSION = PAGE)
+) WITH (DATA_COMPRESSION = PAGE);
 
 CREATE TABLE ITEM (
     i_id                BIGINT NOT NULL,
@@ -120,9 +120,9 @@ CREATE TABLE ITEM (
     i_iattr5            BIGINT DEFAULT NULL,
     i_iattr6            BIGINT DEFAULT NULL,
     i_iattr7            BIGINT DEFAULT NULL,
-    PRIMARY KEY (i_id, i_u_id)
-);
-CREATE INDEX IDX_ITEM_SELLER ON ITEM (i_u_id);
+    PRIMARY KEY (i_id, i_u_id) WITH (DATA_COMPRESSION = PAGE)
+) WITH (DATA_COMPRESSION = PAGE);
+CREATE INDEX IDX_ITEM_SELLER ON ITEM (i_u_id) WITH (DATA_COMPRESSION = PAGE);
 
 
 CREATE TABLE ITEM_ATTRIBUTE (
@@ -134,8 +134,8 @@ CREATE TABLE ITEM_ATTRIBUTE (
     ia_sattr0			VARCHAR(64) DEFAULT NULL,
     FOREIGN KEY (ia_i_id, ia_u_id) REFERENCES ITEM (i_id, i_u_id) ON DELETE CASCADE,
     FOREIGN KEY (ia_gav_id, ia_gag_id) REFERENCES GLOBAL_ATTRIBUTE_VALUE (gav_id, gav_gag_id),
-    PRIMARY KEY (ia_id, ia_i_id, ia_u_id)
-);
+    PRIMARY KEY (ia_id, ia_i_id, ia_u_id) WITH (DATA_COMPRESSION = PAGE)
+) WITH (DATA_COMPRESSION = PAGE);
 
 CREATE TABLE ITEM_IMAGE (
     ii_id               BIGINT NOT NULL,
@@ -143,8 +143,8 @@ CREATE TABLE ITEM_IMAGE (
     ii_u_id             BIGINT NOT NULL,
     ii_sattr0			VARCHAR(128) NOT NULL,
     FOREIGN KEY (ii_i_id, ii_u_id) REFERENCES ITEM (i_id, i_u_id) ON DELETE CASCADE,
-    PRIMARY KEY (ii_id, ii_i_id, ii_u_id)
-);
+    PRIMARY KEY (ii_id, ii_i_id, ii_u_id) WITH (DATA_COMPRESSION = PAGE)
+) WITH (DATA_COMPRESSION = PAGE);
 
 CREATE TABLE ITEM_COMMENT (
     ic_id               BIGINT NOT NULL,
@@ -156,9 +156,9 @@ CREATE TABLE ITEM_COMMENT (
     ic_created          DATETIME,
     ic_updated          DATETIME,
     FOREIGN KEY (ic_i_id, ic_u_id) REFERENCES ITEM (i_id, i_u_id) ON DELETE CASCADE,
-    PRIMARY KEY (ic_id, ic_i_id, ic_u_id)
-);
--- CREATE INDEX IDX_ITEM_COMMENT ON ITEM_COMMENT (ic_i_id, ic_u_id);
+    PRIMARY KEY (ic_id, ic_i_id, ic_u_id) WITH (DATA_COMPRESSION = PAGE)
+) WITH (DATA_COMPRESSION = PAGE);
+-- CREATE INDEX IDX_ITEM_COMMENT ON ITEM_COMMENT (ic_i_id, ic_u_id) WITH (DATA_COMPRESSION = PAGE);
 
 CREATE TABLE ITEM_BID (
     ib_id               BIGINT NOT NULL,
@@ -170,8 +170,8 @@ CREATE TABLE ITEM_BID (
     ib_created          DATETIME,
     ib_updated          DATETIME,
     FOREIGN KEY (ib_i_id, ib_u_id) REFERENCES ITEM (i_id, i_u_id) ON DELETE CASCADE,
-    PRIMARY KEY (ib_id, ib_i_id, ib_u_id)
-);
+    PRIMARY KEY (ib_id, ib_i_id, ib_u_id) WITH (DATA_COMPRESSION = PAGE)
+) WITH (DATA_COMPRESSION = PAGE);
 
 CREATE TABLE ITEM_MAX_BID (
     imb_i_id            BIGINT NOT NULL,
@@ -183,8 +183,8 @@ CREATE TABLE ITEM_MAX_BID (
     imb_updated         DATETIME,
     FOREIGN KEY (imb_i_id, imb_u_id) REFERENCES ITEM (i_id, i_u_id) ON DELETE CASCADE,
     FOREIGN KEY (imb_ib_id, imb_ib_i_id, imb_ib_u_id) REFERENCES ITEM_BID (ib_id, ib_i_id, ib_u_id),
-    PRIMARY KEY (imb_i_id, imb_u_id)
-);
+    PRIMARY KEY (imb_i_id, imb_u_id) WITH (DATA_COMPRESSION = PAGE)
+) WITH (DATA_COMPRESSION = PAGE);
 
 CREATE TABLE ITEM_PURCHASE (
     ip_id               BIGINT NOT NULL,
@@ -193,9 +193,9 @@ CREATE TABLE ITEM_PURCHASE (
     ip_ib_u_id          BIGINT NOT NULL,
     ip_date             DATETIME,
     FOREIGN KEY (ip_ib_id, ip_ib_i_id, ip_ib_u_id) REFERENCES ITEM_BID (ib_id, ib_i_id, ib_u_id) ON DELETE CASCADE,
-    PRIMARY KEY (ip_id, ip_ib_id, ip_ib_i_id, ip_ib_u_id),
-    UNIQUE (ip_ib_id, ip_ib_i_id, ip_ib_u_id)
-);
+    PRIMARY KEY (ip_id, ip_ib_id, ip_ib_i_id, ip_ib_u_id) WITH (DATA_COMPRESSION = PAGE),
+    UNIQUE (ip_ib_id, ip_ib_i_id, ip_ib_u_id) WITH (DATA_COMPRESSION = PAGE)
+) WITH (DATA_COMPRESSION = PAGE);
 
 CREATE TABLE USERACCT_FEEDBACK (
     uf_u_id             BIGINT NOT NULL REFERENCES USERACCT (u_id),
@@ -206,9 +206,9 @@ CREATE TABLE USERACCT_FEEDBACK (
     uf_date             DATETIME,
     uf_sattr0           VARCHAR(80) NOT NULL,
     FOREIGN KEY (uf_i_id, uf_i_u_id) REFERENCES ITEM (i_id, i_u_id),
-    PRIMARY KEY (uf_u_id, uf_i_id, uf_i_u_id, uf_from_id),
+    PRIMARY KEY (uf_u_id, uf_i_id, uf_i_u_id, uf_from_id) WITH (DATA_COMPRESSION = PAGE),
     CHECK (uf_u_id <> uf_from_id)
-);
+) WITH (DATA_COMPRESSION = PAGE);
 
 CREATE TABLE USERACCT_ITEM (
     ui_u_id             BIGINT NOT NULL REFERENCES USERACCT (u_id),
@@ -221,9 +221,9 @@ CREATE TABLE USERACCT_ITEM (
     ui_created          DATETIME,
     FOREIGN KEY (ui_i_id, ui_i_u_id) REFERENCES ITEM (i_id, i_u_id) ON DELETE CASCADE,
     FOREIGN KEY (ui_ip_id, ui_ip_ib_id, ui_ip_ib_i_id, ui_ip_ib_u_id) REFERENCES ITEM_PURCHASE (ip_id, ip_ib_id, ip_ib_i_id, ip_ib_u_id) ON DELETE NO ACTION,
-    PRIMARY KEY (ui_u_id, ui_i_id, ui_i_u_id)
-);
--- CREATE INDEX IDX_USER_ITEM_ID ON USER_ITEM (ui_i_id);
+    PRIMARY KEY (ui_u_id, ui_i_id, ui_i_u_id) WITH (DATA_COMPRESSION = PAGE)
+) WITH (DATA_COMPRESSION = PAGE);
+-- CREATE INDEX IDX_USER_ITEM_ID ON USER_ITEM (ui_i_id) WITH (DATA_COMPRESSION = PAGE);
 
 CREATE TABLE USERACCT_WATCH (
     uw_u_id             BIGINT NOT NULL REFERENCES USERACCT (u_id),
@@ -231,5 +231,5 @@ CREATE TABLE USERACCT_WATCH (
     uw_i_u_id           BIGINT NOT NULL,
     uw_created          DATETIME,
     FOREIGN KEY (uw_i_id, uw_i_u_id) REFERENCES ITEM (i_id, i_u_id),
-    PRIMARY KEY (uw_u_id, uw_i_id, uw_i_u_id)
-);
+    PRIMARY KEY (uw_u_id, uw_i_id, uw_i_u_id) WITH (DATA_COMPRESSION = PAGE)
+) WITH (DATA_COMPRESSION = PAGE);
