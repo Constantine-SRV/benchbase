@@ -7,16 +7,16 @@ create table region (
    r_regionkey int not null,
    r_name char(55) not null,
    r_comment char(152) not null,
-   PRIMARY KEY ( r_regionkey )
-);
+   PRIMARY KEY ( r_regionkey ) WITH (DATA_COMPRESSION = PAGE)
+) WITH (DATA_COMPRESSION = PAGE);
 
 create table nation (
    n_nationkey int not null,
    n_name char(25) not null,
    n_regionkey int not null references region(r_regionkey) ON DELETE CASCADE,
    n_comment char(152) not null,
-   PRIMARY KEY ( n_nationkey )
-);
+   PRIMARY KEY ( n_nationkey ) WITH (DATA_COMPRESSION = PAGE)
+) WITH (DATA_COMPRESSION = PAGE);
 
 create table supplier (
    su_suppkey int not null,
@@ -26,5 +26,5 @@ create table supplier (
    su_phone char(15) not null,
    su_acctbal numeric(12,2) not null,
    su_comment char(101) not null,
-   PRIMARY KEY ( su_suppkey )
-);
+   PRIMARY KEY ( su_suppkey ) WITH (DATA_COMPRESSION = PAGE)
+) WITH (DATA_COMPRESSION = PAGE);
