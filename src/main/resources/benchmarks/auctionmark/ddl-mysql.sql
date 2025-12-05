@@ -1,7 +1,3 @@
-/***************************************************************************
- * Copyright (C) 2010 by H-Store Project
- * Brown University / MIT / Yale
- ***************************************************************************/
 
 SET @OLD_UNIQUE_CHECKS=@@UNIQUE_CHECKS, UNIQUE_CHECKS=0;
 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0;
@@ -26,13 +22,15 @@ DROP TABLE IF EXISTS category CASCADE;
 
 DROP TABLEGROUP IF EXISTS auctionmark_group;
 
--- tablegroup для всех item*-таблиц и связанных по i_id структур
+-- ================================================================
+-- TABLEGROUP с HASH партиционированием
+-- ================================================================
 CREATE TABLEGROUP auctionmark_group
   PARTITION BY HASH
   PARTITIONS 18;
 
 -- ================================================================
--- CONFIG_PROFILE (служебная маленькая таблица)
+-- CONFIG_PROFILE
 -- ================================================================
 CREATE TABLE config_profile (
   cfp_scale_factor        float NOT NULL,
@@ -42,7 +40,7 @@ CREATE TABLE config_profile (
 );
 
 -- ================================================================
--- REGION  (справочник регионов, дублируем на все ноды)
+-- REGION (дублируем на все ноды)
 -- ================================================================
 CREATE TABLE region (
   r_id   bigint NOT NULL,
@@ -51,7 +49,7 @@ CREATE TABLE region (
 ) DUPLICATE_SCOPE='cluster';
 
 -- ================================================================
--- USERACCT (пользователи) – оставляем без tablegroup
+-- USERACCT
 -- ================================================================
 CREATE TABLE useracct (
   u_id      varchar(128) NOT NULL,
@@ -97,7 +95,7 @@ CREATE TABLE useracct_attributes (
 );
 
 -- ================================================================
--- CATEGORY (справочник категорий, дублируем)
+-- CATEGORY (дублируем)
 -- ================================================================
 CREATE TABLE category (
   c_id        bigint NOT NULL,
@@ -110,7 +108,7 @@ CREATE TABLE category (
 CREATE INDEX idx_category_parent ON category (c_parent_id);
 
 -- ================================================================
--- GLOBAL_ATTRIBUTE_GROUP (справочник, дублируем)
+-- GLOBAL_ATTRIBUTE_GROUP (дублируем)
 -- ================================================================
 CREATE TABLE global_attribute_group (
   gag_id   varchar(128) NOT NULL,
@@ -121,7 +119,7 @@ CREATE TABLE global_attribute_group (
 ) DUPLICATE_SCOPE='cluster';
 
 -- ================================================================
--- GLOBAL_ATTRIBUTE_VALUE (справочник, дублируем)
+-- GLOBAL_ATTRIBUTE_VALUE (дублируем)
 -- ================================================================
 CREATE TABLE global_attribute_value (
   gav_id     varchar(128) NOT NULL,
@@ -132,11 +130,13 @@ CREATE TABLE global_attribute_value (
 ) DUPLICATE_SCOPE='cluster';
 
 -- ================================================================
--- ITEM – основной объект, партиционируем по i_id
+-- ITEM - С ВЫЧИСЛЯЕМЫМ ХЕШЕМ
 -- ================================================================
 CREATE TABLE item (
   i_id              varchar(128) NOT NULL,
   i_u_id            varchar(128) NOT NULL,
+  -- НОВОЕ: вычисляемый хеш для партиционирования
+  i_id_hash         bigint AS (CRC32(i_id)) STORED,
   i_c_id            bigint NOT NULL,
   i_name            varchar(100),
   i_description     varchar(1024),
@@ -164,18 +164,21 @@ CREATE TABLE item (
   FOREIGN KEY (i_c_id) REFERENCES category (c_id) ON DELETE CASCADE,
   PRIMARY KEY (i_id, i_u_id)
 ) TABLEGROUP='auctionmark_group'
-  PARTITION BY HASH(i_id)
+  PARTITION BY HASH(i_id_hash)
   PARTITIONS 18;
 
 CREATE INDEX idx_item_seller ON item (i_u_id);
+CREATE INDEX idx_item_hash ON item (i_id_hash);
 
 -- ================================================================
--- ITEM_ATTRIBUTE – PK переставлен, партиционируем по ia_i_id
+-- ITEM_ATTRIBUTE - с хешем
 -- ================================================================
 CREATE TABLE item_attribute (
   ia_id    varchar(128) NOT NULL,
   ia_i_id  varchar(128) NOT NULL,
   ia_u_id  varchar(128) NOT NULL,
+  -- НОВОЕ: вычисляемый хеш
+  ia_i_id_hash bigint AS (CRC32(ia_i_id)) STORED,
   ia_gav_id varchar(128) NOT NULL,
   ia_gag_id varchar(128) NOT NULL,
   ia_sattr0 varchar(64) DEFAULT NULL,
@@ -183,30 +186,34 @@ CREATE TABLE item_attribute (
   FOREIGN KEY (ia_gav_id, ia_gag_id) REFERENCES global_attribute_value (gav_id, gav_gag_id),
   PRIMARY KEY (ia_i_id, ia_u_id, ia_id)
 ) TABLEGROUP='auctionmark_group'
-  PARTITION BY HASH(ia_i_id)
+  PARTITION BY HASH(ia_i_id_hash)
   PARTITIONS 18;
 
 -- ================================================================
--- ITEM_IMAGE – PK переставлен, партиционируем по ii_i_id
+-- ITEM_IMAGE - с хешем
 -- ================================================================
 CREATE TABLE item_image (
   ii_id    varchar(128) NOT NULL,
   ii_i_id  varchar(128) NOT NULL,
   ii_u_id  varchar(128) NOT NULL,
+  -- НОВОЕ: вычисляемый хеш
+  ii_i_id_hash bigint AS (CRC32(ii_i_id)) STORED,
   ii_sattr0 varchar(128) NOT NULL,
   FOREIGN KEY (ii_i_id, ii_u_id) REFERENCES item (i_id, i_u_id) ON DELETE CASCADE,
   PRIMARY KEY (ii_i_id, ii_u_id, ii_id)
 ) TABLEGROUP='auctionmark_group'
-  PARTITION BY HASH(ii_i_id)
+  PARTITION BY HASH(ii_i_id_hash)
   PARTITIONS 18;
 
 -- ================================================================
--- ITEM_COMMENT – PK переставлен, партиционируем по ic_i_id
+-- ITEM_COMMENT - с хешем
 -- ================================================================
 CREATE TABLE item_comment (
   ic_id       bigint NOT NULL,
   ic_i_id     varchar(128) NOT NULL,
   ic_u_id     varchar(128) NOT NULL,
+  -- НОВОЕ: вычисляемый хеш
+  ic_i_id_hash bigint AS (CRC32(ic_i_id)) STORED,
   ic_buyer_id varchar(128) NOT NULL,
   ic_question varchar(128) NOT NULL,
   ic_response varchar(128) DEFAULT NULL,
@@ -216,18 +223,18 @@ CREATE TABLE item_comment (
   FOREIGN KEY (ic_buyer_id) REFERENCES useracct (u_id) ON DELETE CASCADE,
   PRIMARY KEY (ic_i_id, ic_u_id, ic_id)
 ) TABLEGROUP='auctionmark_group'
-  PARTITION BY HASH(ic_i_id)
+  PARTITION BY HASH(ic_i_id_hash)
   PARTITIONS 18;
 
--- CREATE INDEX IDX_ITEM_COMMENT ON ITEM_COMMENT (ic_i_id, ic_u_id);
-
 -- ================================================================
--- ITEM_BID – PK переставлен, партиционируем по ib_i_id
+-- ITEM_BID - с хешем
 -- ================================================================
 CREATE TABLE item_bid (
   ib_id       bigint NOT NULL,
   ib_i_id     varchar(128) NOT NULL,
   ib_u_id     varchar(128) NOT NULL,
+  -- НОВОЕ: вычисляемый хеш
+  ib_i_id_hash bigint AS (CRC32(ib_i_id)) STORED,
   ib_buyer_id varchar(128) NOT NULL,
   ib_bid      float NOT NULL,
   ib_max_bid  float NOT NULL,
@@ -238,15 +245,17 @@ CREATE TABLE item_bid (
   PRIMARY KEY (ib_i_id, ib_u_id, ib_id),
   UNIQUE KEY uk_item_bid_by_id (ib_id, ib_i_id, ib_u_id)
 ) TABLEGROUP='auctionmark_group'
-  PARTITION BY HASH(ib_i_id)
+  PARTITION BY HASH(ib_i_id_hash)
   PARTITIONS 18;
 
 -- ================================================================
--- ITEM_MAX_BID – уже по i_id, просто добавляем partition/tablegroup
+-- ITEM_MAX_BID - с хешем
 -- ================================================================
 CREATE TABLE item_max_bid (
   imb_i_id    varchar(128) NOT NULL,
   imb_u_id    varchar(128) NOT NULL,
+  -- НОВОЕ: вычисляемый хеш
+  imb_i_id_hash bigint AS (CRC32(imb_i_id)) STORED,
   imb_ib_id   bigint NOT NULL,
   imb_ib_i_id varchar(128) NOT NULL,
   imb_ib_u_id varchar(128) NOT NULL,
@@ -257,32 +266,36 @@ CREATE TABLE item_max_bid (
     REFERENCES item_bid (ib_id, ib_i_id, ib_u_id) ON DELETE CASCADE,
   PRIMARY KEY (imb_i_id, imb_u_id)
 ) TABLEGROUP='auctionmark_group'
-  PARTITION BY HASH(imb_i_id)
+  PARTITION BY HASH(imb_i_id_hash)
   PARTITIONS 18;
 
 -- ================================================================
--- ITEM_PURCHASE – партиционируем по ip_ib_i_id (item_id)
+-- ITEM_PURCHASE - с хешем
 -- ================================================================
 CREATE TABLE item_purchase (
   ip_id        bigint NOT NULL,
   ip_ib_id     bigint NOT NULL,
   ip_ib_i_id   varchar(128) NOT NULL,
   ip_ib_u_id   varchar(128) NOT NULL,
+  -- НОВОЕ: вычисляемый хеш
+  ip_ib_i_id_hash bigint AS (CRC32(ip_ib_i_id)) STORED,
   ip_date      timestamp DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (ip_ib_id, ip_ib_i_id, ip_ib_u_id)
     REFERENCES item_bid (ib_id, ib_i_id, ib_u_id) ON DELETE CASCADE,
   PRIMARY KEY (ip_id, ip_ib_id, ip_ib_i_id, ip_ib_u_id)
 ) TABLEGROUP='auctionmark_group'
-  PARTITION BY HASH(ip_ib_i_id)
+  PARTITION BY HASH(ip_ib_i_id_hash)
   PARTITIONS 18;
 
 -- ================================================================
--- USERACCT_FEEDBACK – логично тоже привязать к i_id
+-- USERACCT_FEEDBACK - с хешем
 -- ================================================================
 CREATE TABLE useracct_feedback (
   uf_u_id    varchar(128) NOT NULL,
   uf_i_id    varchar(128) NOT NULL,
   uf_i_u_id  varchar(128) NOT NULL,
+  -- НОВОЕ: вычисляемый хеш
+  uf_i_id_hash bigint AS (CRC32(uf_i_id)) STORED,
   uf_from_id varchar(128) NOT NULL,
   uf_rating  tinyint NOT NULL,
   uf_date    timestamp DEFAULT CURRENT_TIMESTAMP,
@@ -293,16 +306,18 @@ CREATE TABLE useracct_feedback (
   PRIMARY KEY (uf_u_id, uf_i_id, uf_i_u_id, uf_from_id),
   CHECK (uf_u_id <> uf_from_id)
 ) TABLEGROUP='auctionmark_group'
-  PARTITION BY HASH(uf_i_id)
+  PARTITION BY HASH(uf_i_id_hash)
   PARTITIONS 18;
 
 -- ================================================================
--- USERACCT_ITEM – тоже группируем по item_id
+-- USERACCT_ITEM - с хешем
 -- ================================================================
 CREATE TABLE useracct_item (
   ui_u_id       varchar(128) NOT NULL,
   ui_i_id       varchar(128) NOT NULL,
   ui_i_u_id     varchar(128) NOT NULL,
+  -- НОВОЕ: вычисляемый хеш
+  ui_i_id_hash  bigint AS (CRC32(ui_i_id)) STORED,
   ui_ip_id      bigint,
   ui_ip_ib_id   bigint,
   ui_ip_ib_i_id varchar(128),
@@ -314,24 +329,24 @@ CREATE TABLE useracct_item (
     REFERENCES item_purchase (ip_id, ip_ib_id, ip_ib_i_id, ip_ib_u_id) ON DELETE CASCADE,
   PRIMARY KEY (ui_u_id, ui_i_id, ui_i_u_id)
 ) TABLEGROUP='auctionmark_group'
-  PARTITION BY HASH(ui_i_id)
+  PARTITION BY HASH(ui_i_id_hash)
   PARTITIONS 18;
 
--- CREATE INDEX IDX_USERACCT_ITEM_ID ON USERACCT_ITEM (ui_i_id);
-
 -- ================================================================
--- USERACCT_WATCH – тоже по uw_i_id
+-- USERACCT_WATCH - с хешем
 -- ================================================================
 CREATE TABLE useracct_watch (
   uw_u_id    varchar(128) NOT NULL,
   uw_i_id    varchar(128) NOT NULL,
   uw_i_u_id  varchar(128) NOT NULL,
+  -- НОВОЕ: вычисляемый хеш
+  uw_i_id_hash bigint AS (CRC32(uw_i_id)) STORED,
   uw_created timestamp DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (uw_i_id, uw_i_u_id) REFERENCES item (i_id, i_u_id) ON DELETE CASCADE,
   FOREIGN KEY (uw_u_id) REFERENCES useracct (u_id) ON DELETE CASCADE,
   PRIMARY KEY (uw_u_id, uw_i_id, uw_i_u_id)
 ) TABLEGROUP='auctionmark_group'
-  PARTITION BY HASH(uw_i_id)
+  PARTITION BY HASH(uw_i_id_hash)
   PARTITIONS 18;
 
 SET FOREIGN_KEY_CHECKS=@OLD_FOREIGN_KEY_CHECKS;
