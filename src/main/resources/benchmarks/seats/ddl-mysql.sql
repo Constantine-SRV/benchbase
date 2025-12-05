@@ -17,9 +17,6 @@ DROP TABLE IF EXISTS config_profile;
 DROP TABLEGROUP IF EXISTS seats_group;
 
 -- Создаём tablegroup для SEATS с 18 партициями (оптимально для 3-6-9 серверов)
--- 3 сервера = 6 партиций на сервер
--- 6 серверов = 3 партиции на сервер
--- 9 серверов = 2 партиции на сервер
 CREATE TABLEGROUP seats_group
   PARTITION BY HASH
   PARTITIONS 18;
@@ -139,11 +136,12 @@ CREATE TABLE airline (
 
 -- =========================
 -- CUSTOMER (главная транзакционная таблица)
--- Партиционируем по c_id - основной ключ шардирования
+-- Партиционируем по c_id
+-- ВАЖНО: UNIQUE constraint на c_id_str должен включать ключ партиционирования c_id
 -- =========================
 CREATE TABLE customer (
     c_id         varchar(128) NOT NULL,
-    c_id_str     varchar(64) UNIQUE NOT NULL,
+    c_id_str     varchar(64)  NOT NULL,
     c_base_ap_id bigint,
     c_balance    float        NOT NULL,
     c_sattr00    varchar(32),
@@ -187,6 +185,7 @@ CREATE TABLE customer (
     c_iattr18    bigint,
     c_iattr19    bigint,
     PRIMARY KEY (c_id),
+    UNIQUE KEY idx_c_id_str (c_id_str, c_id),
     FOREIGN KEY (c_base_ap_id) REFERENCES airport (ap_id)
 )
 TABLEGROUP = 'seats_group'
@@ -286,7 +285,9 @@ CREATE INDEX f_depart_time_idx ON flight (f_depart_time);
 
 -- =========================
 -- RESERVATION
--- Партиционируем по r_c_id (customer_id) - основной паттерн доступа
+-- КРИТИЧНО: Партиционируем по r_f_id (flight_id) вместо r_c_id
+-- Это позволяет UNIQUE constraint (r_f_id, r_seat) работать правильно
+-- Логика: одно место на рейсе может быть занято только один раз
 -- =========================
 CREATE TABLE reservation (
     r_id      bigint       NOT NULL,
@@ -303,13 +304,13 @@ CREATE TABLE reservation (
     r_iattr06 bigint,
     r_iattr07 bigint,
     r_iattr08 bigint,
-    UNIQUE (r_f_id, r_seat),
     PRIMARY KEY (r_id, r_c_id, r_f_id),
+    UNIQUE KEY idx_flight_seat (r_f_id, r_seat),
     FOREIGN KEY (r_c_id) REFERENCES customer (c_id),
     FOREIGN KEY (r_f_id) REFERENCES flight (f_id)
 )
 TABLEGROUP = 'seats_group'
-PARTITION BY KEY (r_c_id) PARTITIONS 18;
+PARTITION BY KEY (r_f_id) PARTITIONS 18;
 
 SET FOREIGN_KEY_CHECKS=@OLD_FOREIGN_KEY_CHECKS;
 SET UNIQUE_CHECKS=@OLD_UNIQUE_CHECKS;
