@@ -136,7 +136,7 @@ CREATE TABLE airline (
 
 -- =========================
 -- CUSTOMER (главная транзакционная таблица)
--- Партиционируем по c_id
+-- Партиционируем по HASH от c_id (varchar преобразуется в хэш автоматически)
 -- ВАЖНО: UNIQUE constraint на c_id_str должен включать ключ партиционирования c_id
 -- =========================
 CREATE TABLE customer (
@@ -189,11 +189,11 @@ CREATE TABLE customer (
     FOREIGN KEY (c_base_ap_id) REFERENCES airport (ap_id)
 )
 TABLEGROUP = 'seats_group'
-PARTITION BY KEY (c_id) PARTITIONS 18;
+PARTITION BY HASH (c_id) PARTITIONS 18;
 
 -- =========================
 -- FREQUENT_FLYER
--- Партиционируем по ff_c_id (customer_id)
+-- Партиционируем по HASH от ff_c_id (customer_id)
 -- =========================
 CREATE TABLE frequent_flyer (
     ff_c_id     varchar(128) NOT NULL,
@@ -224,13 +224,13 @@ CREATE TABLE frequent_flyer (
     FOREIGN KEY (ff_al_id) REFERENCES airline (al_id)
 )
 TABLEGROUP = 'seats_group'
-PARTITION BY KEY (ff_c_id) PARTITIONS 18;
+PARTITION BY HASH (ff_c_id) PARTITIONS 18;
 
 CREATE INDEX idx_ff_customer_id ON frequent_flyer (ff_c_id_str);
 
 -- =========================
 -- FLIGHT
--- Партиционируем по f_id для равномерного распределения рейсов
+-- Партиционируем по HASH от f_id для равномерного распределения рейсов
 -- =========================
 CREATE TABLE flight (
     f_id           varchar(128)                        NOT NULL,
@@ -279,13 +279,13 @@ CREATE TABLE flight (
     FOREIGN KEY (f_arrive_ap_id) REFERENCES airport (ap_id)
 )
 TABLEGROUP = 'seats_group'
-PARTITION BY KEY (f_id) PARTITIONS 18;
+PARTITION BY HASH (f_id) PARTITIONS 18;
 
 CREATE INDEX f_depart_time_idx ON flight (f_depart_time);
 
 -- =========================
 -- RESERVATION
--- КРИТИЧНО: Партиционируем по r_f_id (flight_id) вместо r_c_id
+-- КРИТИЧНО: Партиционируем по HASH от r_f_id (flight_id) вместо r_c_id
 -- Это позволяет UNIQUE constraint (r_f_id, r_seat) работать правильно
 -- Логика: одно место на рейсе может быть занято только один раз
 -- =========================
@@ -310,7 +310,7 @@ CREATE TABLE reservation (
     FOREIGN KEY (r_f_id) REFERENCES flight (f_id)
 )
 TABLEGROUP = 'seats_group'
-PARTITION BY KEY (r_f_id) PARTITIONS 18;
+PARTITION BY HASH (r_f_id) PARTITIONS 18;
 
 SET FOREIGN_KEY_CHECKS=@OLD_FOREIGN_KEY_CHECKS;
 SET UNIQUE_CHECKS=@OLD_UNIQUE_CHECKS;
