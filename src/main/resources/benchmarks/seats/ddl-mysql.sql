@@ -2,20 +2,31 @@ SET @OLD_UNIQUE_CHECKS=@@UNIQUE_CHECKS, UNIQUE_CHECKS=0;
 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0;
 
 -- Drop Tables
-DROP TABLE IF EXISTS config_profile CASCADE;
-DROP TABLE IF EXISTS config_histograms CASCADE;
-DROP TABLE IF EXISTS reservation CASCADE;
-DROP TABLE IF EXISTS frequent_flyer CASCADE;
-DROP TABLE IF EXISTS customer CASCADE;
-DROP TABLE IF EXISTS flight CASCADE;
-DROP TABLE IF EXISTS airport_distance CASCADE;
-DROP TABLE IF EXISTS airport CASCADE;
-DROP TABLE IF EXISTS airline CASCADE;
-DROP TABLE IF EXISTS country CASCADE;
+DROP TABLE IF EXISTS reservation;
+DROP TABLE IF EXISTS frequent_flyer;
+DROP TABLE IF EXISTS flight;
+DROP TABLE IF EXISTS customer;
+DROP TABLE IF EXISTS airport_distance;
+DROP TABLE IF EXISTS airline;
+DROP TABLE IF EXISTS airport;
+DROP TABLE IF EXISTS country;
+DROP TABLE IF EXISTS config_histograms;
+DROP TABLE IF EXISTS config_profile;
 
--- 
--- CONFIG_PROFILE
---
+-- Удаляем tablegroup если существует
+DROP TABLEGROUP IF EXISTS seats_group;
+
+-- Создаём tablegroup для SEATS с 18 партициями (оптимально для 3-6-9 серверов)
+-- 3 сервера = 6 партиций на сервер
+-- 6 серверов = 3 партиции на сервер
+-- 9 серверов = 2 партиции на сервер
+CREATE TABLEGROUP seats_group
+  PARTITION BY HASH
+  PARTITIONS 18;
+
+-- =========================
+-- CONFIG_PROFILE (конфигурация - не партиционируем)
+-- =========================
 CREATE TABLE config_profile (
     cfp_scale_factor        float                               NOT NULL,
     cfp_aiport_max_customer text                                NOT NULL,
@@ -29,9 +40,9 @@ CREATE TABLE config_profile (
     cfp_code_ids_xrefs      text                                NOT NULL
 );
 
---
--- CONFIG_HISTOGRAMS
---
+-- =========================
+-- CONFIG_HISTOGRAMS (справочник - не партиционируем)
+-- =========================
 CREATE TABLE config_histograms (
     cfh_name       varchar(128)   NOT NULL,
     cfh_data       varchar(10005) NOT NULL,
@@ -39,9 +50,9 @@ CREATE TABLE config_histograms (
     PRIMARY KEY (cfh_name)
 );
 
--- 
--- COUNTRY
---
+-- =========================
+-- COUNTRY (справочник - не партиционируем)
+-- =========================
 CREATE TABLE country (
     co_id     bigint      NOT NULL,
     co_name   varchar(64) NOT NULL,
@@ -50,9 +61,9 @@ CREATE TABLE country (
     PRIMARY KEY (co_id)
 );
 
---
--- AIRPORT
---
+-- =========================
+-- AIRPORT (справочник - не партиционируем)
+-- =========================
 CREATE TABLE airport (
     ap_id          bigint       NOT NULL,
     ap_code        varchar(3)   NOT NULL,
@@ -84,9 +95,9 @@ CREATE TABLE airport (
     FOREIGN KEY (ap_co_id) REFERENCES country (co_id)
 );
 
---
--- AIRPORT_DISTANCE
---
+-- =========================
+-- AIRPORT_DISTANCE (справочник - не партиционируем)
+-- =========================
 CREATE TABLE airport_distance (
     d_ap_id0   bigint NOT NULL,
     d_ap_id1   bigint NOT NULL,
@@ -96,9 +107,9 @@ CREATE TABLE airport_distance (
     FOREIGN KEY (d_ap_id1) REFERENCES airport (ap_id)
 );
 
---
--- AIRLINE
---
+-- =========================
+-- AIRLINE (справочник - не партиционируем)
+-- =========================
 CREATE TABLE airline (
     al_id        bigint       NOT NULL,
     al_iata_code varchar(3),
@@ -126,14 +137,15 @@ CREATE TABLE airline (
     FOREIGN KEY (al_co_id) REFERENCES country (co_id)
 );
 
---
--- CUSTOMER
---
+-- =========================
+-- CUSTOMER (главная транзакционная таблица)
+-- Партиционируем по c_id - основной ключ шардирования
+-- =========================
 CREATE TABLE customer (
-    c_id         varchar(128)             NOT NULL,
+    c_id         varchar(128) NOT NULL,
     c_id_str     varchar(64) UNIQUE NOT NULL,
     c_base_ap_id bigint,
-    c_balance    float              NOT NULL,
+    c_balance    float        NOT NULL,
     c_sattr00    varchar(32),
     c_sattr01    varchar(8),
     c_sattr02    varchar(8),
@@ -176,15 +188,18 @@ CREATE TABLE customer (
     c_iattr19    bigint,
     PRIMARY KEY (c_id),
     FOREIGN KEY (c_base_ap_id) REFERENCES airport (ap_id)
-);
+)
+TABLEGROUP = 'seats_group'
+PARTITION BY KEY (c_id) PARTITIONS 18;
 
---
+-- =========================
 -- FREQUENT_FLYER
---
+-- Партиционируем по ff_c_id (customer_id)
+-- =========================
 CREATE TABLE frequent_flyer (
-    ff_c_id     varchar(128)      NOT NULL,
-    ff_al_id    bigint      NOT NULL,
-    ff_c_id_str varchar(64) NOT NULL,
+    ff_c_id     varchar(128) NOT NULL,
+    ff_al_id    bigint       NOT NULL,
+    ff_c_id_str varchar(64)  NOT NULL,
     ff_sattr00  varchar(32),
     ff_sattr01  varchar(32),
     ff_sattr02  varchar(32),
@@ -208,14 +223,18 @@ CREATE TABLE frequent_flyer (
     PRIMARY KEY (ff_c_id, ff_al_id),
     FOREIGN KEY (ff_c_id) REFERENCES customer (c_id),
     FOREIGN KEY (ff_al_id) REFERENCES airline (al_id)
-);
+)
+TABLEGROUP = 'seats_group'
+PARTITION BY KEY (ff_c_id) PARTITIONS 18;
+
 CREATE INDEX idx_ff_customer_id ON frequent_flyer (ff_c_id_str);
 
---
+-- =========================
 -- FLIGHT
---
+-- Партиционируем по f_id для равномерного распределения рейсов
+-- =========================
 CREATE TABLE flight (
-    f_id           varchar(128)                              NOT NULL,
+    f_id           varchar(128)                        NOT NULL,
     f_al_id        bigint                              NOT NULL,
     f_depart_ap_id bigint                              NOT NULL,
     f_depart_time  timestamp DEFAULT CURRENT_TIMESTAMP NOT NULL,
@@ -259,18 +278,22 @@ CREATE TABLE flight (
     FOREIGN KEY (f_al_id) REFERENCES airline (al_id),
     FOREIGN KEY (f_depart_ap_id) REFERENCES airport (ap_id),
     FOREIGN KEY (f_arrive_ap_id) REFERENCES airport (ap_id)
-);
+)
+TABLEGROUP = 'seats_group'
+PARTITION BY KEY (f_id) PARTITIONS 18;
+
 CREATE INDEX f_depart_time_idx ON flight (f_depart_time);
 
---
+-- =========================
 -- RESERVATION
---
+-- Партиционируем по r_c_id (customer_id) - основной паттерн доступа
+-- =========================
 CREATE TABLE reservation (
-    r_id      bigint NOT NULL,
+    r_id      bigint       NOT NULL,
     r_c_id    varchar(128) NOT NULL,
     r_f_id    varchar(128) NOT NULL,
-    r_seat    bigint NOT NULL,
-    r_price   float  NOT NULL,
+    r_seat    bigint       NOT NULL,
+    r_price   float        NOT NULL,
     r_iattr00 bigint,
     r_iattr01 bigint,
     r_iattr02 bigint,
@@ -284,7 +307,9 @@ CREATE TABLE reservation (
     PRIMARY KEY (r_id, r_c_id, r_f_id),
     FOREIGN KEY (r_c_id) REFERENCES customer (c_id),
     FOREIGN KEY (r_f_id) REFERENCES flight (f_id)
-);
+)
+TABLEGROUP = 'seats_group'
+PARTITION BY KEY (r_c_id) PARTITIONS 18;
 
 SET FOREIGN_KEY_CHECKS=@OLD_FOREIGN_KEY_CHECKS;
 SET UNIQUE_CHECKS=@OLD_UNIQUE_CHECKS;
