@@ -1,6 +1,9 @@
 SET @OLD_UNIQUE_CHECKS=@@UNIQUE_CHECKS, UNIQUE_CHECKS=0;
 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0;
 
+-- =========================
+-- DROP ALL TABLES
+-- =========================
 DROP TABLE IF EXISTS call_center;
 DROP TABLE IF EXISTS catalog_page;
 DROP TABLE IF EXISTS catalog_returns;
@@ -26,6 +29,22 @@ DROP TABLE IF EXISTS web_returns;
 DROP TABLE IF EXISTS web_sales;
 DROP TABLE IF EXISTS web_site;
 
+-- Удаляем tablegroup если существует
+DROP TABLEGROUP IF EXISTS tpcds_group;
+
+-- =========================
+-- CREATE TABLEGROUP
+-- =========================
+-- Создаём tablegroup для TPC-DS с 18 партициями (оптимально для 6 серверов)
+CREATE TABLEGROUP tpcds_group
+  PARTITION BY HASH
+  PARTITIONS 18;
+
+-- =========================
+-- DIMENSION TABLES (не партиционируем - будут реплицированы)
+-- =========================
+
+-- customer_address (маленькая справочная таблица)
 CREATE TABLE customer_address (
     ca_address_sk    integer  NOT NULL,
     ca_address_id    char(16) NOT NULL,
@@ -43,6 +62,7 @@ CREATE TABLE customer_address (
     PRIMARY KEY (ca_address_sk)
 );
 
+-- customer_demographics (справочная таблица)
 CREATE TABLE customer_demographics (
     cd_demo_sk            integer NOT NULL,
     cd_gender             char(1),
@@ -56,6 +76,7 @@ CREATE TABLE customer_demographics (
     PRIMARY KEY (cd_demo_sk)
 );
 
+-- date_dim (справочная таблица)
 CREATE TABLE date_dim (
     d_date_sk           integer  NOT NULL,
     d_date_id           char(16) NOT NULL,
@@ -88,6 +109,7 @@ CREATE TABLE date_dim (
     PRIMARY KEY (d_date_sk)
 );
 
+-- warehouse (справочная таблица)
 CREATE TABLE warehouse (
     w_warehouse_sk    integer  NOT NULL,
     w_warehouse_id    char(16) NOT NULL,
@@ -106,6 +128,7 @@ CREATE TABLE warehouse (
     PRIMARY KEY (w_warehouse_sk)
 );
 
+-- ship_mode (справочная таблица)
 CREATE TABLE ship_mode (
     sm_ship_mode_sk integer  NOT NULL,
     sm_ship_mode_id char(16) NOT NULL,
@@ -116,6 +139,7 @@ CREATE TABLE ship_mode (
     PRIMARY KEY (sm_ship_mode_sk)
 );
 
+-- time_dim (справочная таблица)
 CREATE TABLE time_dim (
     t_time_sk   integer  NOT NULL,
     t_time_id   char(16) NOT NULL,
@@ -130,6 +154,7 @@ CREATE TABLE time_dim (
     PRIMARY KEY (t_time_sk)
 );
 
+-- reason (справочная таблица)
 CREATE TABLE reason (
     r_reason_sk   integer  NOT NULL,
     r_reason_id   char(16) NOT NULL,
@@ -137,6 +162,7 @@ CREATE TABLE reason (
     PRIMARY KEY (r_reason_sk)
 );
 
+-- income_band (справочная таблица)
 CREATE TABLE income_band (
     ib_income_band_sk integer NOT NULL,
     ib_lower_bound    integer,
@@ -144,6 +170,7 @@ CREATE TABLE income_band (
     PRIMARY KEY (ib_income_band_sk)
 );
 
+-- item (справочная таблица)
 CREATE TABLE item (
     i_item_sk        integer  NOT NULL,
     i_item_id        char(16) NOT NULL,
@@ -170,6 +197,7 @@ CREATE TABLE item (
     PRIMARY KEY (i_item_sk)
 );
 
+-- store (справочная таблица)
 CREATE TABLE store (
     s_store_sk         integer  NOT NULL,
     s_store_id         char(16) NOT NULL,
@@ -203,6 +231,7 @@ CREATE TABLE store (
     PRIMARY KEY (s_store_sk)
 );
 
+-- call_center (справочная таблица)
 CREATE TABLE call_center (
     cc_call_center_sk integer  NOT NULL,
     cc_call_center_id char(16) NOT NULL,
@@ -238,6 +267,7 @@ CREATE TABLE call_center (
     PRIMARY KEY (cc_call_center_sk)
 );
 
+-- customer (справочная таблица)
 CREATE TABLE customer (
     c_customer_sk          integer  NOT NULL,
     c_customer_id          char(16) NOT NULL,
@@ -260,6 +290,7 @@ CREATE TABLE customer (
     PRIMARY KEY (c_customer_sk)
 );
 
+-- web_site (справочная таблица)
 CREATE TABLE web_site (
     web_site_sk        integer  NOT NULL,
     web_site_id        char(16) NOT NULL,
@@ -290,30 +321,7 @@ CREATE TABLE web_site (
     PRIMARY KEY (web_site_sk)
 );
 
-CREATE TABLE store_returns (
-    sr_returned_date_sk   integer,
-    sr_return_time_sk     integer,
-    sr_item_sk            integer NOT NULL,
-    sr_customer_sk        integer,
-    sr_cdemo_sk           integer,
-    sr_hdemo_sk           integer,
-    sr_addr_sk            integer,
-    sr_store_sk           integer,
-    sr_reason_sk          integer,
-    sr_ticket_number      integer NOT NULL,
-    sr_return_quantity    integer,
-    sr_return_amt         decimal(7, 2),
-    sr_return_tax         decimal(7, 2),
-    sr_return_amt_inc_tax decimal(7, 2),
-    sr_fee                decimal(7, 2),
-    sr_return_ship_cost   decimal(7, 2),
-    sr_refunded_cash      decimal(7, 2),
-    sr_reversed_charge    decimal(7, 2),
-    sr_store_credit       decimal(7, 2),
-    sr_net_loss           decimal(7, 2),
-    PRIMARY KEY (sr_item_sk, sr_ticket_number)
-);
-
+-- household_demographics (справочная таблица)
 CREATE TABLE household_demographics (
     hd_demo_sk        integer NOT NULL,
     hd_income_band_sk integer,
@@ -323,6 +331,7 @@ CREATE TABLE household_demographics (
     PRIMARY KEY (hd_demo_sk)
 );
 
+-- web_page (справочная таблица)
 CREATE TABLE web_page (
     wp_web_page_sk      integer  NOT NULL,
     wp_web_page_id      char(16) NOT NULL,
@@ -341,6 +350,7 @@ CREATE TABLE web_page (
     PRIMARY KEY (wp_web_page_sk)
 );
 
+-- promotion (справочная таблица)
 CREATE TABLE promotion (
     p_promo_sk        integer  NOT NULL,
     p_promo_id        char(16) NOT NULL,
@@ -364,6 +374,7 @@ CREATE TABLE promotion (
     PRIMARY KEY (p_promo_sk)
 );
 
+-- catalog_page (справочная таблица)
 CREATE TABLE catalog_page (
     cp_catalog_page_sk     integer  NOT NULL,
     cp_catalog_page_id     char(16) NOT NULL,
@@ -377,14 +388,49 @@ CREATE TABLE catalog_page (
     PRIMARY KEY (cp_catalog_page_sk)
 );
 
+-- =========================
+-- FACT TABLES (партиционируем по item_sk)
+-- =========================
+
+-- store_returns (FACT - партиционируем по sr_item_sk)
+CREATE TABLE store_returns (
+    sr_returned_date_sk   integer,
+    sr_return_time_sk     integer,
+    sr_item_sk            integer NOT NULL,
+    sr_customer_sk        integer,
+    sr_cdemo_sk           integer,
+    sr_hdemo_sk           integer,
+    sr_addr_sk            integer,
+    sr_store_sk           integer,
+    sr_reason_sk          integer,
+    sr_ticket_number      integer NOT NULL,
+    sr_return_quantity    integer,
+    sr_return_amt         decimal(7, 2),
+    sr_return_tax         decimal(7, 2),
+    sr_return_amt_inc_tax decimal(7, 2),
+    sr_fee                decimal(7, 2),
+    sr_return_ship_cost   decimal(7, 2),
+    sr_refunded_cash      decimal(7, 2),
+    sr_reversed_charge    decimal(7, 2),
+    sr_store_credit       decimal(7, 2),
+    sr_net_loss           decimal(7, 2),
+    PRIMARY KEY (sr_item_sk, sr_ticket_number)
+)
+TABLEGROUP = 'tpcds_group'
+PARTITION BY HASH (sr_item_sk) PARTITIONS 18;
+
+-- inventory (FACT - партиционируем по inv_item_sk)
 CREATE TABLE inventory (
     inv_date_sk          integer NOT NULL,
     inv_item_sk          integer NOT NULL,
     inv_warehouse_sk     integer NOT NULL,
     inv_quantity_on_hand integer,
     PRIMARY KEY (inv_date_sk, inv_item_sk, inv_warehouse_sk)
-);
+)
+TABLEGROUP = 'tpcds_group'
+PARTITION BY HASH (inv_item_sk) PARTITIONS 18;
 
+-- catalog_returns (FACT - партиционируем по cr_item_sk)
 CREATE TABLE catalog_returns (
     cr_returned_date_sk      integer,
     cr_returned_time_sk      integer,
@@ -414,8 +460,11 @@ CREATE TABLE catalog_returns (
     cr_store_credit          decimal(7, 2),
     cr_net_loss              decimal(7, 2),
     PRIMARY KEY (cr_item_sk, cr_order_number)
-);
+)
+TABLEGROUP = 'tpcds_group'
+PARTITION BY HASH (cr_item_sk) PARTITIONS 18;
 
+-- web_returns (FACT - партиционируем по wr_item_sk)
 CREATE TABLE web_returns (
     wr_returned_date_sk      integer,
     wr_returned_time_sk      integer,
@@ -442,8 +491,11 @@ CREATE TABLE web_returns (
     wr_account_credit        decimal(7, 2),
     wr_net_loss              decimal(7, 2),
     PRIMARY KEY (wr_item_sk, wr_order_number)
-);
+)
+TABLEGROUP = 'tpcds_group'
+PARTITION BY HASH (wr_item_sk) PARTITIONS 18;
 
+-- web_sales (FACT - партиционируем по ws_item_sk)
 CREATE TABLE web_sales (
     ws_sold_date_sk          integer,
     ws_sold_time_sk          integer,
@@ -480,8 +532,11 @@ CREATE TABLE web_sales (
     ws_net_paid_inc_ship_tax decimal(7, 2),
     ws_net_profit            decimal(7, 2),
     PRIMARY KEY (ws_item_sk, ws_order_number)
-);
+)
+TABLEGROUP = 'tpcds_group'
+PARTITION BY HASH (ws_item_sk) PARTITIONS 18;
 
+-- catalog_sales (FACT - партиционируем по cs_item_sk)
 CREATE TABLE catalog_sales (
     cs_sold_date_sk          integer,
     cs_sold_time_sk          integer,
@@ -518,8 +573,11 @@ CREATE TABLE catalog_sales (
     cs_net_paid_inc_ship_tax decimal(7, 2),
     cs_net_profit            decimal(7, 2),
     PRIMARY KEY (cs_item_sk, cs_order_number)
-);
+)
+TABLEGROUP = 'tpcds_group'
+PARTITION BY HASH (cs_item_sk) PARTITIONS 18;
 
+-- store_sales (FACT - самая большая таблица, партиционируем по ss_item_sk)
 CREATE TABLE store_sales (
     ss_sold_date_sk       integer,
     ss_sold_time_sk       integer,
@@ -545,7 +603,9 @@ CREATE TABLE store_sales (
     ss_net_paid_inc_tax   decimal(7, 2),
     ss_net_profit         decimal(7, 2),
     PRIMARY KEY (ss_item_sk, ss_ticket_number)
-);
+)
+TABLEGROUP = 'tpcds_group'
+PARTITION BY HASH (ss_item_sk) PARTITIONS 18;
 
 SET FOREIGN_KEY_CHECKS=@OLD_FOREIGN_KEY_CHECKS;
 SET UNIQUE_CHECKS=@OLD_UNIQUE_CHECKS;
