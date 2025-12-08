@@ -1,24 +1,29 @@
-/*
-For MySQL, TPCH indices are created post-load. which improves load 
-performance. See src/main/resources/benchmarks/tpch/postload-mysql.sql
-(specified in <afterload> in mysql/sample_tpch_config.xml). When indices
-are created before the load, the insert operations increases overall
-load time by >30%. This happens because every insert needs to update 
-all table indices, which results into additional binlog/redo log updates,
-index seeks, and more data IOPS (if data does not fit in memory).
-*/
+
 
 SET @OLD_UNIQUE_CHECKS=@@UNIQUE_CHECKS, UNIQUE_CHECKS=0;
 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0;
 
-DROP TABLE IF EXISTS nation CASCADE;
-DROP TABLE IF EXISTS region CASCADE;
-DROP TABLE IF EXISTS part CASCADE;
-DROP TABLE IF EXISTS supplier CASCADE;
-DROP TABLE IF EXISTS partsupp CASCADE;
-DROP TABLE IF EXISTS orders CASCADE;
-DROP TABLE IF EXISTS customer CASCADE;
-DROP TABLE IF EXISTS lineitem CASCADE;
+DROP TABLE IF EXISTS lineitem;
+DROP TABLE IF EXISTS orders;
+DROP TABLE IF EXISTS partsupp;
+DROP TABLE IF EXISTS customer;
+DROP TABLE IF EXISTS supplier;
+DROP TABLE IF EXISTS part;
+DROP TABLE IF EXISTS nation;
+DROP TABLE IF EXISTS region;
+
+DROP TABLEGROUP IF EXISTS tpch_group;
+
+-- =========================
+-- TABLEGROUP
+-- =========================
+CREATE TABLEGROUP tpch_group
+  PARTITION BY HASH
+  PARTITIONS 18;
+
+-- =========================
+-- DIMENSION TABLES (не партиционируем)
+-- =========================
 
 CREATE TABLE region (
     r_regionkey integer  NOT NULL,
@@ -32,8 +37,7 @@ CREATE TABLE nation (
     n_name      char(25) NOT NULL,
     n_regionkey integer  NOT NULL,
     n_comment   varchar(152),
-    PRIMARY KEY (n_nationkey),
-    FOREIGN KEY (n_regionkey) REFERENCES region (r_regionkey) ON DELETE CASCADE
+    PRIMARY KEY (n_nationkey)
 );
 
 CREATE TABLE part (
@@ -57,21 +61,26 @@ CREATE TABLE supplier (
     s_phone     char(15)       NOT NULL,
     s_acctbal   decimal(15, 2) NOT NULL,
     s_comment   varchar(101)   NOT NULL,
-    PRIMARY KEY (s_suppkey),
-    FOREIGN KEY (s_nationkey) REFERENCES nation (n_nationkey) ON DELETE CASCADE
+    PRIMARY KEY (s_suppkey)
 );
 
+-- =========================
+-- FACT TABLES (партиционируем)
+-- =========================
+
+-- partsupp: партиционируем по ps_partkey
 CREATE TABLE partsupp (
     ps_partkey    integer        NOT NULL,
     ps_suppkey    integer        NOT NULL,
     ps_availqty   integer        NOT NULL,
     ps_supplycost decimal(15, 2) NOT NULL,
     ps_comment    varchar(199)   NOT NULL,
-    PRIMARY KEY (ps_partkey, ps_suppkey),
-    FOREIGN KEY (ps_partkey) REFERENCES part (p_partkey) ON DELETE CASCADE,
-    FOREIGN KEY (ps_suppkey) REFERENCES supplier (s_suppkey) ON DELETE CASCADE
-);
+    PRIMARY KEY (ps_partkey, ps_suppkey)
+)
+TABLEGROUP = 'tpch_group'
+PARTITION BY HASH (ps_partkey) PARTITIONS 18;
 
+-- customer: партиционируем по c_custkey
 CREATE TABLE customer (
     c_custkey    integer        NOT NULL,
     c_name       varchar(25)    NOT NULL,
@@ -81,10 +90,12 @@ CREATE TABLE customer (
     c_acctbal    decimal(15, 2) NOT NULL,
     c_mktsegment char(10)       NOT NULL,
     c_comment    varchar(117)   NOT NULL,
-    PRIMARY KEY (c_custkey),
-    FOREIGN KEY (c_nationkey) REFERENCES nation (n_nationkey) ON DELETE CASCADE
-);
+    PRIMARY KEY (c_custkey)
+)
+TABLEGROUP = 'tpch_group'
+PARTITION BY HASH (c_custkey) PARTITIONS 18;
 
+-- orders: партиционируем по o_orderkey для колокации с lineitem
 CREATE TABLE orders (
     o_orderkey      integer        NOT NULL,
     o_custkey       integer        NOT NULL,
@@ -95,9 +106,12 @@ CREATE TABLE orders (
     o_clerk         char(15)       NOT NULL,
     o_shippriority  integer        NOT NULL,
     o_comment       varchar(79)    NOT NULL,
-    PRIMARY KEY (o_orderkey),
-    FOREIGN KEY (o_custkey) REFERENCES customer (c_custkey) ON DELETE CASCADE
-);
+    PRIMARY KEY (o_orderkey)
+)
+TABLEGROUP = 'tpch_group'
+PARTITION BY HASH (o_orderkey) PARTITIONS 18;
+
+-- lineitem: партиционируем по l_orderkey (колокация с orders)
 
 CREATE TABLE lineitem (
     l_orderkey      integer        NOT NULL,
@@ -116,10 +130,10 @@ CREATE TABLE lineitem (
     l_shipinstruct  char(25)       NOT NULL,
     l_shipmode      char(10)       NOT NULL,
     l_comment       varchar(44)    NOT NULL,
-    PRIMARY KEY (l_orderkey, l_linenumber),
-    FOREIGN KEY (l_orderkey) REFERENCES orders (o_orderkey) ON DELETE CASCADE,
-    FOREIGN KEY (l_partkey, l_suppkey) REFERENCES partsupp (ps_partkey, ps_suppkey) ON DELETE CASCADE
-);
+    PRIMARY KEY (l_orderkey, l_linenumber)
+)
+TABLEGROUP = 'tpch_group'
+PARTITION BY HASH (l_orderkey) PARTITIONS 18;
 
 SET FOREIGN_KEY_CHECKS=@OLD_FOREIGN_KEY_CHECKS;
 SET UNIQUE_CHECKS=@OLD_UNIQUE_CHECKS;
