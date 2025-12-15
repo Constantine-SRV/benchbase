@@ -23,6 +23,8 @@ import com.oltpbenchmark.util.FileUtil;
 import com.oltpbenchmark.util.SQLUtil;
 import com.oltpbenchmark.util.ScriptRunner;
 import com.oltpbenchmark.util.ThreadUtil;
+import com.zaxxer.hikari.HikariConfig;
+import com.zaxxer.hikari.HikariDataSource;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
@@ -37,6 +39,9 @@ import org.slf4j.LoggerFactory;
 /** Base class for all benchmark implementations */
 public abstract class BenchmarkModule {
   private static final Logger LOG = LoggerFactory.getLogger(BenchmarkModule.class);
+
+  private static HikariConfig hk_config = new HikariConfig();
+  private static HikariDataSource hk_ds;
 
   /** The workload configuration for this benchmark invocation */
   protected final WorkloadConfiguration workConf;
@@ -63,6 +68,20 @@ public abstract class BenchmarkModule {
   public BenchmarkModule(WorkloadConfiguration workConf) {
     this.workConf = workConf;
     this.dialects = new StatementDialects(workConf);
+
+    if (workConf.getNewConnectionPerTxn()
+        && hk_ds == null) { // Use connection pool only if using new connection per txn
+      try {
+        hk_config.setJdbcUrl(workConf.getUrl());
+        hk_config.setUsername(workConf.getUsername());
+        hk_config.setPassword(workConf.getPassword());
+        hk_config.setMaximumPoolSize(4000); // TODO: Move to constants or config
+        hk_ds = new HikariDataSource(hk_config);
+      } catch (Exception e) {
+        LOG.error("Unable to initialize HikariCP data source: %s", e.toString());
+        throw new RuntimeException("Unable to initialize HikariCP data source", e);
+      }
+    }
     // setClassLoader();
     this.classLoader = Thread.currentThread().getContextClassLoader();
   }
@@ -80,13 +99,15 @@ public abstract class BenchmarkModule {
   // --------------------------------------------------------------------------
 
   public final Connection makeConnection() throws SQLException {
-
-    if (StringUtils.isEmpty(workConf.getUsername())) {
-      return DriverManager.getConnection(workConf.getUrl());
-    } else {
-      return DriverManager.getConnection(
-          workConf.getUrl(), workConf.getUsername(), workConf.getPassword());
+    if (hk_ds == null) {
+      if (StringUtils.isEmpty(workConf.getUsername())) {
+        return DriverManager.getConnection(workConf.getUrl());
+      } else {
+        return DriverManager.getConnection(
+            workConf.getUrl(), workConf.getUsername(), workConf.getPassword());
+      }
     }
+    return hk_ds.getConnection();
   }
 
   private String afterLoadScriptPath = null;
