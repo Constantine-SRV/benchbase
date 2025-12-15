@@ -34,6 +34,7 @@ public class WorkloadConfiguration {
   private String username;
   private String password;
   private String driverClass;
+  private int maxConnections = 4000;
   private int batchSize;
   private String sessionSetupFile;
   private int maxRetries;

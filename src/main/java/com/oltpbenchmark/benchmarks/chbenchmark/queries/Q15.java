@@ -69,9 +69,9 @@ public class Q15 extends GenericQuery {
         } catch (SQLException e) {
           // Игнорируем - view скорее всего уже существует
         }
-        
+
         super.run(conn);
-        
+
       } finally {
         // Пытаемся удалить view, игнорируем все ошибки
         try {
