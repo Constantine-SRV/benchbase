@@ -29,7 +29,7 @@ IF EXISTS (SELECT * FROM sys.indexes WHERE name = 'UQ_OORDER' AND object_id = OB
 IF EXISTS (SELECT * FROM sys.indexes WHERE name = 'IDX_CUSTOMER_NAME' AND object_id = OBJECT_ID('[dbo].[CUSTOMER]'))
     DROP INDEX IDX_CUSTOMER_NAME ON [dbo].[CUSTOMER];
 
-GO
+
 
 -- PRIMARY KEYS WITHOUT FILLFACTOR (read-only or update-only tables)
 ALTER TABLE [dbo].[WAREHOUSE] ADD CONSTRAINT PK_WAREHOUSE 
